@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "hardhat/console.sol";//to console output
+import "hardhat/console.sol";
 
 contract TokenMarketPlace is Ownable{
     
@@ -47,23 +47,51 @@ function adjustTokenpriceBaseOnDemand() public {
 
 }
 
-function buyGLDToken(uint256 _amoutOfToken) public payable {
+function buyGLDToken(uint256 _amountOfToken) public payable {
+    require(_amountOfToken>0,"Invalid Token amount");
+    uint requiredTokenPrice = calculateTokenPrice(_amountOfToken);
+    console.log("requiredTokenPrice",requiredTokenPrice);
+    require(requiredTokenPrice==msg.value,"Incorrect token price paid");
+    buyerCount = buyerCount + 1; 
+    // Transfer token to the buyer address
+    gldToken.safeTransfer(msg.sender,_amountOfToken);
+    // Event Emiting
+    emit TokenBought(msg.sender, _amountOfToken, requiredTokenPrice);
 
 }
 
-function calculateTokenPrice(uint _amoutOfToken) public returns(uint){
+function calculateTokenPrice(uint _amountOfToken) public returns(uint){
+    require(_amountOfToken>0,"Amount Of Token > 0");
+        adjustTokenpriceBaseOnDemand();
+        uint amountToPay = _amountOfToken.mul(tokenPrice).div(1e18);
+        console.log("amountToPay",amountToPay);
+        return amountToPay;
 
 }
 
-function sellGLDToken(uint256 _amountOftoken) public {
+function sellGLDToken(uint256 _amountOfToken) public {
+     require(gldToken.balanceOf(msg.sender)>= _amountOfToken, "invalid amount of token");
+     sellerCount = sellerCount + 1;
+    uint priceToPayToUser = calculateTokenPrice(_amountOfToken);
+    gldToken.safeTransferFrom(msg.sender,address(this),_amountOfToken);
+    (bool success,) = payable(msg.sender).call{value:priceToPayToUser}("");
+    require(success,"Transaction Failed");
+    emit TokenSold(msg.sender,_amountOfToken, priceToPayToUser);
+
 
 }
 
 function withdrawTokens(uint256 _amount) public onlyOwner{
+    require(gldToken.balanceOf(address(this))>=_amount,"Out of balance");
+    gldToken.safeTransfer(msg.sender,_amount);
+    emit TokensWithdrawn(msg.sender, _amount);
 
 }
 
 function withdrawEther(uint256 _amount) public onlyOwner{
+    require(address(this).balance>=_amount,"Invalid Ether amount");
+    (bool success,) = payable(msg.sender).call{value:_amount}("");
+    require(success,"Transaction Failed");
 
 }
 
